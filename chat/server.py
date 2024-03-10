@@ -36,6 +36,7 @@ class Server:
 
         except KeyboardInterrupt:
             self.close_connections()
+            print("Server disappeared!")
 
     def _broadcast_tcp(self, message):
         [client[0].send(message) for client in self.clients]
@@ -73,19 +74,23 @@ class Server:
         return
 
     def _connect_with_tcp_client(self):
-        while True:
-            client, address = self.tcp_socket.accept()
-            print(f"[{datetime.datetime.now()}] Client {address} connected!")
+        try:
+            while True:
+                client, address = self.tcp_socket.accept()
+                print(f"[{datetime.datetime.now()}] Client {address} connected!")
 
-            client.send('NICK'.encode('ascii'))
-            nickname = client.recv(1024).decode(CODING)
-            print(f"Nickname set to {nickname}")
-            self.clients.append((client, nickname, address))
+                client.send('NICK'.encode('ascii'))
+                nickname = client.recv(1024).decode(CODING)
+                print(f"Nickname set to {nickname}")
+                self.clients.append((client, nickname, address))
 
-            self._broadcast_tcp(f"{nickname} joined the chat.".encode(CODING))
-            client.send("Connected to server!".encode(CODING))
+                self._broadcast_tcp(f"{nickname} joined the chat.".encode(CODING))
+                client.send("Connected to server!".encode(CODING))
 
-            threading.Thread(target=self._handle_tcp_message, args=((client, nickname, address),)).start()
+                threading.Thread(target=self._handle_tcp_message, args=((client, nickname, address),)).start()
+        except KeyboardInterrupt:
+            self.close_connections()
+            print("Server disappeared!")
 
     def close_connections(self):
         for client in self.clients:
