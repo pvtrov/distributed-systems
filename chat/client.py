@@ -95,8 +95,10 @@ class Client:
             message = f"{self.nickname}: {input_message}"
             if self.sending_mode == 'tcp':
                 self.tcp_socket.send(message.encode(CODING))
+                print("[TCP] " + message)
             elif self.sending_mode == 'udp':
                 self.udp_socket.sendto(message.encode(CODING), (self.server_ip, self.server_port))
+                print("[UDP] " + message)
             elif self.sending_mode == 'multicast':
                 self.multi_socket.sendto(message.encode(CODING), (MULTICAST_IP, self.multi_port))
 

@@ -17,6 +17,7 @@ class Server:
         self.clients = []  # (client_socket, nickname, address)
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM, socket.IPPROTO_TCP)
         self.udp_socket = socket.socket(socket.AF_INET, socket.SOCK_DGRAM, socket.IPPROTO_UDP)
+        self.threads = []
 
     def start_server(self):
         try:
@@ -27,8 +28,14 @@ class Server:
             self.tcp_socket.listen(MAX_CLIENTS_NUM)
             self.udp_socket.bind((self.server_ip, self.server_port))
 
-            threading.Thread(target=self._connect_with_tcp_client).start()
-            threading.Thread(target=self._handle_udp_message).start()
+            tcp_thread = threading.Thread(target=self._connect_with_tcp_client)
+            tcp_thread.start()
+
+            udp_thread = threading.Thread(target=self._handle_udp_message)
+            udp_thread.start()
+
+            self.threads.append(udp_thread)
+            self.threads.append(tcp_thread)
 
         except OSError:
             print("Adress already in use! Please end all of your previous connections")
@@ -38,11 +45,11 @@ class Server:
             self.close_connections()
             print("Server disappeared!")
 
-    def _broadcast_tcp(self, message):
-        [client[0].send(message) for client in self.clients]
+    def _broadcast_tcp(self, message, address):
+        [client[0].send(message) for client in self.clients if client[2] != address]
 
-    def _broadcast_udp(self, message):
-        [self.udp_socket.sendto(message, client[2]) for client in self.clients]
+    def _broadcast_udp(self, message, address):
+        [self.udp_socket.sendto(message, client[2]) for client in self.clients if client[2] != address]
 
     def _handle_tcp_message(self, client):
         while True:
@@ -52,7 +59,7 @@ class Server:
                     raise ServerException("Client ended connection.")
 
                 print(f"[TCP][{client[2]}][{datetime.datetime.now()}] Got message from {client[1]}")
-                self._broadcast_tcp(message)
+                self._broadcast_tcp(message, client[2])
 
             except ServerException:
                 self._disconnect_client(client)
@@ -63,14 +70,14 @@ class Server:
             message, address = self.udp_socket.recvfrom(1024)
             nickname = next((client[1] for client in self.clients if client[2] == address), None)
             print(f"[UDP][{address}][{datetime.datetime.now()}] Got message from {nickname}")
-            self._broadcast_udp(message)
+            self._broadcast_udp(message, address)
 
     def _disconnect_client(self, client):
         client[0].close()
         self.clients.remove(client)
         nickname = client[1]
         print(f"[{datetime.datetime.now()}] {nickname} left the chat")
-        self._broadcast_tcp(f"{nickname} left the chat.".encode(CODING))
+        self._broadcast_tcp(f"{nickname} left the chat.".encode(CODING), client[2])
         return
 
     def _connect_with_tcp_client(self):
@@ -79,15 +86,19 @@ class Server:
                 client, address = self.tcp_socket.accept()
                 print(f"[{datetime.datetime.now()}] Client {address} connected!")
 
-                client.send('NICK'.encode('ascii'))
+                client.send('NICK'.encode(CODING))
                 nickname = client.recv(1024).decode(CODING)
                 print(f"Nickname set to {nickname}")
                 self.clients.append((client, nickname, address))
 
-                self._broadcast_tcp(f"{nickname} joined the chat.".encode(CODING))
+                self._broadcast_tcp(f"{nickname} joined the chat.".encode(CODING), address)
                 client.send("Connected to server!".encode(CODING))
 
-                threading.Thread(target=self._handle_tcp_message, args=((client, nickname, address),)).start()
+                tcp_message_thread = threading.Thread(target=self._handle_tcp_message, args=((client, nickname, address),))
+                tcp_message_thread.start()
+
+                self.threads.append(tcp_message_thread)
+
         except KeyboardInterrupt:
             self.close_connections()
             print("Server disappeared!")
@@ -96,6 +107,9 @@ class Server:
         for client in self.clients:
             client[0].send("SERVER_SHUTDOWN".encode(CODING))
             client[0].close()
+
+        for thread_ in self.threads:
+            thread_.join(timeout=3)
 
 
 if __name__ == '__main__':
