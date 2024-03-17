@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Horoskop</title>
+    <style>
+        body {
+            background-color: #6a0dad;
+            color: white;
+            font-family: Arial, sans-serif;
+            text-align: center;
+        }
+        h2 {
+            margin-top: 50px;
+        }
+        #horoscope_form {
+            margin-top: 20px;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+        }
+        input[type="text"] {
+            width: 30%;
+            padding: 10px;
+            border-radius: 5px;
+            border: none;
+            background-color: rgba(255, 255, 255, 0.1);
+            color: white;
+            margin-bottom: 20px;
+        }
+        input[type="button"] {
+            background-color: #9c27b0;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        input[type="button"]:hover {
+            background-color: #7b1fa2;
+        }
+    </style>
+</head>
+<body>
+    <h2>Podaj znak zodiaku:</h2>
+    <form id="horoscope_form">
+        <input type="text" id="zodiac_sign" name="zodiac_sign">
+        <br>
+        <input type="button" value="Wyślij" onclick="submitForm()">
+    </form>
+
+    <script>
+        function submitForm() {
+            var zodiac_sign = document.getElementById("zodiac_sign").value;
+            window.location.href = "/" + zodiac_sign;
+        }
+
+        document.getElementById("horoscope_form").addEventListener("submit", function(event) {
+            event.preventDefault();
+            submitForm();
+        });
+    </script>
+</body>
+</html>
