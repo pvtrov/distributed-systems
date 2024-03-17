@@ -1,10 +1,9 @@
 import configparser
-from typing import Union
-
 import requests
 from fastapi import FastAPI, Request
-from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from requests import HTTPError
 from unidecode import unidecode
 
 app = FastAPI()
@@ -25,19 +24,35 @@ zodiac_signs = {
     'ryby': 'peixes'
 }
 
+error_messages = {
+    'invalid_sign': 'Zły znak zodiaku, spróbój ponownie!',
+    'horoscopeAPI_error': 'Wystąpił błąd z połączeniem z horoscopeAPI',
+    'translatorAPI_error': 'Wystąpił błąd z połączeniem z translatorAPI',
+    'invalid_path': 'Nie znaleziono strony dla ścieżki: {path}'
+}
 
-def remove_polish_signs(text):
+
+def clear_input(text: str):
     text = text.lower()
     text = unidecode(text)
     return text
 
 
-class HoroscopeService:
-    def __init__(self):
-        self.horoscope_URL = "https://horoscope-api.p.rapidapi.com/pt/"
-        self.translator_URL = "https://api-free.deepl.com/v2/translate"
+def validate_sign(zodiac_sign: str):
+    return zodiac_sign in zodiac_signs.keys()
+
+
+class HoroscopeServiceException(Exception):
+    def __init__(self, rc, error_msg):
         self.doggo_URL = "https://http.dog/"
+        self.rc = rc
+        self.error_msg = error_msg
+
+
+class HoroscopeAPI:
+    def __init__(self):
         self._parse_config()
+        self.translatorAPI = TranslatorAPI(self.auth_key, self.target_lang, self.translator_URL)
 
     def _parse_config(self):
         config = configparser.ConfigParser()
@@ -45,70 +60,96 @@ class HoroscopeService:
 
         self.auth_key = config['DeepL']['auth_key']
         self.target_lang = config['DeepL']['target_lang']
+        self.translator_URL = config['DeepL']['URL']
 
         self.x_rapid_key = config['Horoscope']['X-RapidAPI-Key']
         self.x_rapid_host = config['Horoscope']['X-RapidAPI-Host']
+        self.horoscope_URL = config['Horoscope']['URL']
 
-    def _create_headers(self, is_translator=False):
-        if is_translator:
-            return {"Authorization": f"DeepL-Auth-Key {self.auth_key}"}
-
+    def _create_headers(self):
         return {"X-RapidAPI-Key": self.x_rapid_key, "X-RapidAPI-Host": self.x_rapid_host}
 
-    def _translate_horoscope(self, text_to_translate: str):
-        params = {'text': text_to_translate, 'target_lang': self.target_lang}
-        try:
-            response = requests.post(
-                url=self.translator_URL, headers=self._create_headers(is_translator=True), data=params
-            )
-            response.raise_for_status()
-            json_data = response.json()
-            return json_data['translations'][0]['text']
+    @staticmethod
+    def _get_portuguese_sign(zodiac_sign: str):
+        return zodiac_signs[zodiac_sign]
 
-        except requests.exceptions.HTTPError as err:
-            return err
-
-    def get_horoscope(self, zodiac_sign_pl: str, request: Request):
-        zodiac_sign = zodiac_signs[remove_polish_signs(zodiac_sign_pl)]
+    def _request_horoscope(self, zodiac_sign: str):
         url = f"{self.horoscope_URL}{zodiac_sign}"
+        response = requests.get(url=url, headers=self._create_headers())
+        response.raise_for_status()
+
+        return response.json()['text']
+
+    def get_horoscope(self, zodiac_sign: str):
+        pt_zodiac_sign = self._get_portuguese_sign(zodiac_sign)
+
         try:
-            response = requests.get(url=url, headers=self._create_headers())
-            response.raise_for_status()
-
-            json_data = response.json()
-            horoscope_text = self._translate_horoscope(json_data['text'])
-
-            if not isinstance(horoscope_text, str):
-                return self.return_error_site(request, horoscope_text.response.status_code, horoscope_text.response.reason)
-
-            return templates.TemplateResponse(
-                "print_horoscope.html",
-                {"request": request, "zodiac_sign": zodiac_sign_pl, "horoscope_text": horoscope_text}
+            pt_horoscope = self._request_horoscope(pt_zodiac_sign)
+        except requests.exceptions.HTTPError as err:
+            raise HTTPError(
+                f"{error_messages['horoscopeAPI_error']}: {err.response.reason}", response=err.response
             )
 
+        try:
+            translated_horoscope = self.translatorAPI.translate_text(pt_horoscope)
         except requests.exceptions.HTTPError as err:
-            if err.response.status_code == 404:
-                err_msg = f"Nie znaleziono horoskopu dla znaku {zodiac_sign_pl}"
-                return self.return_error_site(request, err.response.status_code, err_msg)
+            raise HTTPError(
+                f"{error_messages['translatorAPI_error']}: {err.response.reason}", response=err.response
+            )
 
-            return self.return_error_site(request, err.response.status_code, err.response.reason)
+        return translated_horoscope
 
-    def return_error_site(self, request: Request, error_code: Union[int, str], error_message: str):
-        url = f"{self.doggo_URL}{error_code}.jpg"
+
+class TranslatorAPI:
+    def __init__(self, auth_key: str, target_lang: str, url: str):
+        self.translator_URL = url
+        self.auth_key = auth_key
+        self.target_lang = target_lang
+
+    def _create_header(self):
+        return {"Authorization": f"DeepL-Auth-Key {self.auth_key}"}
+
+    def translate_text(self, text: str):
+        params = {'text': text, 'target_lang': self.target_lang}
+        print(self._create_header())
+        response = requests.post(url=self.translator_URL, headers=self._create_header(), data=params)
+        response.raise_for_status()
+
+        return response.json()['translations'][0]['text']
+
+
+class HoroscopeService:
+    def __init__(self):
+        self.horoscopeAPI = HoroscopeAPI()
+
+    def get_horoscope(self, zodiac_sign: str, request: Request):
+        zodiac_sign = clear_input(zodiac_sign)
+        if not validate_sign(zodiac_sign):
+            raise HoroscopeServiceException(rc=400, error_msg=error_messages['invalid_sign'])
+
+        try:
+            horoscope = self.horoscopeAPI.get_horoscope(zodiac_sign)
+        except HTTPError as err:
+            raise HoroscopeServiceException(rc=err.response.status_code, error_msg=err.args[0])
+
         return templates.TemplateResponse(
-            "error_site.html", {"request": request, "image_url": url, "error_message": error_message}
+            "print_horoscope.html", {"request": request, "zodiac_sign": zodiac_sign, "horoscope_text": horoscope}
         )
 
 
 horoscope_service = HoroscopeService()
 
 
+@app.exception_handler(HoroscopeServiceException)
+async def horoscope_exception_handler(request: Request, exception: HoroscopeServiceException):
+    url = f"{exception.doggo_URL}{exception.rc}.jpg"
+    return templates.TemplateResponse(
+        "error_site.html", {"request": request, "image_url": url, "error_message": exception.error_msg}
+    )
+
+
 @app.get("/{zodiac_sign}")
 async def main_horoscope_for_zodiac_sign(request: Request, zodiac_sign: str):
-    if zodiac_sign not in zodiac_signs.keys():
-        err_msg = "Zły znak zodiaku, spróbój ponownie!"
-        return horoscope_service.return_error_site(request, "500", err_msg)
-
     return horoscope_service.get_horoscope(zodiac_sign, request)
 
 
@@ -118,6 +159,5 @@ async def main_horoscope_form(request: Request):
 
 
 @app.get("/{path:path}", response_class=HTMLResponse)
-async def catch_all(request: Request, path: str):
-    err_msg = f"Nie znaleziono strony dla ścieżki: {path}"
-    return horoscope_service.return_error_site(request, "404", err_msg)
+async def catch_all(path: str):
+    raise HoroscopeServiceException(404, error_messages['invalid_path'].format(path=path))
