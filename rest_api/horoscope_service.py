@@ -65,8 +65,8 @@ class HoroscopeService:
             json_data = response.json()
             return json_data['translations'][0]['text']
 
-        except requests.exceptions.HTTPError:
-            return response.status_code
+        except requests.exceptions.HTTPError as err:
+            return err
 
     def get_horoscope(self, zodiac_sign_pl: str, request: Request):
         zodiac_sign = zodiac_signs[remove_polish_signs(zodiac_sign_pl)]
@@ -78,22 +78,20 @@ class HoroscopeService:
             json_data = response.json()
             horoscope_text = self._translate_horoscope(json_data['text'])
 
-            if isinstance(horoscope_text, int):
-                err_msg = "Wystąpił nieoczekiwany błąd w tłumaczeniu!"
-                return self.return_error_site(request, response.status_code, err_msg)
+            if not isinstance(horoscope_text, str):
+                return self.return_error_site(request, horoscope_text.response.status_code, horoscope_text.response.reason)
 
             return templates.TemplateResponse(
                 "print_horoscope.html",
                 {"request": request, "zodiac_sign": zodiac_sign_pl, "horoscope_text": horoscope_text}
             )
 
-        except requests.exceptions.HTTPError:
-            if response.status_code == 404:
+        except requests.exceptions.HTTPError as err:
+            if err.response.status_code == 404:
                 err_msg = f"Nie znaleziono horoskopu dla znaku {zodiac_sign_pl}"
-                return self.return_error_site(request, response.status_code, err_msg)
+                return self.return_error_site(request, err.response.status_code, err_msg)
 
-            err_msg = "Wystąpił nieoczekiwany błąd w tworzeniu horoskopu!"
-            return self.return_error_site(request, response.status_code, err_msg)
+            return self.return_error_site(request, err.response.status_code, err.response.reason)
 
     def return_error_site(self, request: Request, error_code: Union[int, str], error_message: str):
         url = f"{self.doggo_URL}{error_code}.jpg"

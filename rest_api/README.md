@@ -1,6 +1,8 @@
 # :sparkles: Horoscope API App :sparkles:
 
-This FastAPI application serves as a tool for generating today's horoscope. You can simply select your zodiac sign to receive a personalized horoscope prediction.
+This FastAPI application serves as a tool for generating today's horoscope. You can simply select your zodiac sign to receive a personalized horoscope prediction. 
+
+App accepts input and generates horoscopes in Polish language.
 
 ---
 
