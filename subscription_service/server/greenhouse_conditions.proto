@@ -1,0 +1,58 @@
+syntax = "proto3";
+
+option java_outer_classname = "GreenhouseConditionsProto";
+option java_multiple_files = true;
+option java_package = "gen";
+
+service GreenhouseConditions {
+  rpc SubscribeGreenhouseConditions(GreenhouseConditionsSubscription) returns (stream Conditions);
+}
+
+message GreenhouseConditionsSubscription {
+  repeated string greenhouses = 1;
+  int32 clientID = 2;
+}
+
+message Conditions {
+  string greenhouse = 1;
+  float temperature = 2;
+  float humidity = 3;
+  bool is_daytime = 4;
+  repeated Light light = 5;
+  repeated Soil soil = 6;
+  float co2_level = 7;
+  float nitrogen_level = 8;
+  PlantType plant_type = 9;
+  FertilizerType fertilizer_type = 10;
+}
+
+message Light {
+  float intensity = 1;
+  Color color = 2;
+}
+
+enum Color {
+  RED = 0;
+  BLUE = 1;
+  WHITE = 2;
+  GREEN = 3;
+}
+
+message Soil {
+  float moisture_level = 1;
+  float pH_level = 2;
+}
+
+enum PlantType {
+  FLOWER = 0;
+  VEGETABLE = 1;
+  HERB = 2;
+  FRUIT = 3;
+}
+
+enum FertilizerType {
+  ORGANIC = 0;
+  INORGANIC = 1;
+  LIQUID = 2;
+  GRANULAR = 3;
+}
