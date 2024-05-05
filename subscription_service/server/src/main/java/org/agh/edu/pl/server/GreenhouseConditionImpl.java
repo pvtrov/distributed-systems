@@ -25,13 +25,15 @@ public class GreenhouseConditionImpl extends GreenhouseConditionsImplBase {
         Subscriber subscriber = findOrCreateSubscriber(clientID, responseObserver);
         var greenhousesToSubscribe = greenhousesIds.stream().map(this::mapIdToGreenhouse).toList();
         greenhousesToSubscribe.forEach(x -> x.addSubscriber(subscriber));
-        System.out.println("Subscriber connected");
+        System.out.println("Subscriber " + clientID + " connected");
     }
 
     private Subscriber findOrCreateSubscriber(int clientId, StreamObserver<Conditions> responseObserver){
         Optional<Subscriber> optSubscriber = subscribers.stream().filter(x -> x.getClientId()==clientId).findFirst();
         if(optSubscriber.isPresent()){
-            return optSubscriber.get();
+            Subscriber subscriber = optSubscriber.get();
+            subscriber.setResponseObserver(responseObserver);
+            return subscriber;
         }
         Subscriber subscriber = new Subscriber(clientId, responseObserver);
         subscribers.add(subscriber);

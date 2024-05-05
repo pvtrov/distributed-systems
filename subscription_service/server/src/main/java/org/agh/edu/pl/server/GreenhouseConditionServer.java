@@ -67,5 +67,4 @@ public class GreenhouseConditionServer {
         server.start();
         server.blockUntilShutdown();
     }
-
 }

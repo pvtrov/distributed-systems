@@ -20,7 +20,7 @@ public class ConditionsGenerator extends Thread {
                 greenhouse.setConditionsToSend(newConditions);
             });
             try {
-                sleep(1000);
+                sleep(10000);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             }
