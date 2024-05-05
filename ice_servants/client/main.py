@@ -1,8 +1,6 @@
 import sys, Ice
 import time
 
-# from Ice.LocalException_ice import ObjectNotExistException, ConnectionRefusedException
-
 import Demo
 
 DEMO_ENDPOINTS = "tcp -h 127.0.0.2 -p 10000 -z : udp -h 127.0.0.2 -p 10000 -z"
